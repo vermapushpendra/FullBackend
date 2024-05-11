@@ -52,14 +52,13 @@ const userSchema = new Schema(
 );
 
 //pre hook for bcrypt
-userSchema.pre("save", async function () {
+userSchema.pre("save", async function (next) {
     if (!this.isModified("password")) return next();
     this.password = await bcrypt.hash(this.password, 10)
     next();
-
 });
 
-//password match method
+//password match method -- User Authentication at login time
 userSchema.methods.isPasswordCorrect = async function (password) {
     return await bcrypt.compare(password, this.password); //return the boolean value
 }

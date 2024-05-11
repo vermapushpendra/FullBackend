@@ -21,9 +21,8 @@ const registerUser = asyncHandler(async (req, res, next) => {
 
     //destructuring
     const { username, fullname, email, password } = req.body
-    console.log("Full name is:", fullname)
 
-    //validation
+    //validation --These value should not be empty
     if ([fullname, email, username, password].some((feild) =>
         feild?.trim() === "")
     ) {
@@ -31,7 +30,7 @@ const registerUser = asyncHandler(async (req, res, next) => {
     }
 
     //user existence
-    const existedUser = User.findOne({
+    const existedUser = await User.findOne({
         $or: [{ username }, { email }]
     })
 
@@ -39,19 +38,28 @@ const registerUser = asyncHandler(async (req, res, next) => {
         throw new ApiError(409, "User already Exists")
     }
 
-    const avatarLocalPath = req.files?.avatar[0]?.path
-    const coverImageLocalPath = req.files?.coverImage[0]?.path
+    const avatarLocalPath = req.files?.avatar[0]?.path;
 
-    if (avatarLocalPath) {
-        throw new ApiError(400, "Avatar is required")
+    let coverImageLocalPath;
+    if (req.files && req.files.coverImage && req.files.coverImage.length > 0) {
+        coverImageLocalPath = req.files?.coverImage[0]?.path;
     }
+    else {
+        coverImageLocalPath = "";
+    }
+
+    if (!avatarLocalPath) {
+        throw new ApiError(400, "Avatar is required (Path)");
+    }
+
+
 
     //Upload on Cloudinary
     const avatar = await uploadOnCloudinary(avatarLocalPath)
     const coverImage = await uploadOnCloudinary(coverImageLocalPath)
 
     if (!avatar) {
-        throw new ApiError(400, "Avatar is required")
+        throw new ApiError(400, "Avatar is required to upload on Cloudinary")
     }
 
     //Create object and send in DB
@@ -77,7 +85,7 @@ const registerUser = asyncHandler(async (req, res, next) => {
     //response
     // return res.status(201).json()
     return res.status(201).json(
-        ApiResponse(200, createdUser, "User Registered successfully!!")
+        new ApiResponse(200, createdUser, "User Registered successfully!!")
     )
 
 })
