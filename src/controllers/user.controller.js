@@ -202,7 +202,7 @@ const logoutUser = asyncHandler(async (req, res, next) => {
 })
 
 //RefreshAccessToken --> next Create endpoint in route
-const refreshAccessToken = asyncHandler(async () => {
+const refreshAccessToken = asyncHandler(async (req, res) => {
     const incommingRefreshToken = req.cookies?.refreshToken
 
     if (!incommingRefreshToken) {
@@ -251,6 +251,148 @@ const refreshAccessToken = asyncHandler(async () => {
 
 })
 
+//Change password method
+const changeUserPassword = asyncHandler(async (req, res) => {
+
+    const { oldPassword, newPassword } = req.body
+
+    const user = await User.findById(req.user?._id)
+
+    if (!user) {
+        throw new ApiError(404, "User is not found")
+    }
+
+    //match the password --> encrypted password in db
+    const isPasswordRight = await user.isPasswordCorrect(oldPassword)
+
+    if (!isPasswordRight) {
+        throw new ApiError(400, "your old password is not correct")
+    }
+
+    if (oldPassword === newPassword) {
+        throw new ApiError(400, "Your new password and old password is same, it should be different")
+    }
+
+    user.password = newPassword
+    await user.save({ validateBeforeSave: true })
+
+    return res
+        .status(200)
+        .json(
+            new ApiResponse(200, {}, "Your password is changed successfully!")
+        )
+
+
+})
+
+
+//get current user
+const getCurrentUser = asyncHandler(async (req, res) => {
+    return res
+        .status(200)
+        .json(
+            new ApiResponse(200, req.user, "User fetched Successfully")
+        )
+
+})
+
+
+//update user details
+const updateUserDetails = asyncHandler(async (req, res) => {
+
+    const { fullname, email } = req.body
+
+    if (!fullname || !email) {
+        throw new ApiError(400, "feild cannot be")
+    }
+
+    const user = await User.findByIdAndUpdate(req.user._id,
+        {
+            $set: {
+                fullname, // can be written as well
+                email: email
+            }
+
+        },
+        {
+            new: true  //Value will be return after the updation -- like after the username update
+        }
+    ).select("-password")
+
+    return res
+        .status(200)
+        .json(
+            new ApiResponse(200, user, "User details Updated Successfully !")
+        )
+})
+
+//update user files -- avatar
+const updateAvatar = asyncHandler(async (req, res) => {
+    const avatarLocalPath = req.file?.path
+
+    if (!avatarLocalPath) {
+        throw new ApiError(400, "please choose the avatar, file path is not avialable")
+    }
+
+    const avatar = await uploadOnCloudinary(avatarLocalPath)
+
+    if (!avatar.url) {
+        throw new ApiError(400, "Error while uploading avatar on Cloudinary")
+    }
+
+    const user = User.findByIdAndUpdate(req.user?._id,
+        {
+            $set: {
+                avatar: avatar.url
+            }
+        },
+
+        {
+            new: true
+        }
+    ).select("-password")
+
+    return res
+    .status(200)
+    .json(
+        new ApiResponse(200, user, "User avatar is updated successfully!")
+    )
+
+})
+
+const updateCoverImage = asyncHandler(async (req, res) => {
+    const coverImageLocalPath = req.file?.path
+
+    if (!coverImageLocalPath) {
+        throw new ApiError(400, "please choose the coverImage, file path is not avialable")
+    }
+
+    const coverImage = await uploadOnCloudinary(avatarLocalPath)
+
+    if (!coverImage.url) {
+        throw new ApiError(400, "Error while uploading CoverImage on Cloudinary")
+    }
+
+    const user = User.findByIdAndUpdate(req.user?._id,
+        {
+            $set: {
+                CoverImage: coverImage.url
+            }
+        },
+
+        {
+            new: true
+        }
+    ).select("-password")
+
+    return res
+    .status(200)
+    .json(
+        new ApiResponse(200, user, "User CoverImage is updated successfully!")
+    )
+
+})
+
 
 
 export {
@@ -258,5 +400,10 @@ export {
     loginUser,
     logoutUser,
     refreshAccessToken,
+    changeUserPassword,
+    getCurrentUser,
+    updateUserDetails,
+    updateAvatar,
+    updateCoverImage,
 }
 

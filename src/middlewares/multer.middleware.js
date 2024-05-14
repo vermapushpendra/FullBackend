@@ -2,12 +2,12 @@ import multer from 'multer'
 
 //Middleware
 const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
+    destination: (_, file, cb) => {
         cb(null, './public/temp');
     },
-    filename: (req, file, cb) => {
+    filename: (_, file, cb) => {
         cb(null, file.originalname);
-        
+
     }
 
 })
