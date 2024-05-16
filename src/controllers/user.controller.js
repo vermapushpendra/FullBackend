@@ -4,6 +4,7 @@ import { User } from "../models/user.model.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js"
 import jwt from "jsonwebtoken"
+import { Subscription } from "../models/subscription.model.js";
 
 //Method of generateAccessAndRefreshTokens
 const generateAccessAndRefreshTokens = async (userId) => {
@@ -91,7 +92,7 @@ const registerUser = asyncHandler(async (req, res, next) => {
         username: username.toLowerCase()
     })
 
-    //Response with removed password and refreshTokens
+    //give Response with removed password and refreshTokens
     const createdUser = await User.findById(user._id).select(
         "-password -refreshToken"
     )
@@ -326,7 +327,7 @@ const updateUserDetails = asyncHandler(async (req, res) => {
         )
 })
 
-//update user files -- avatar
+//update user file -- avatar
 const updateAvatar = asyncHandler(async (req, res) => {
     const avatarLocalPath = req.file?.path
 
@@ -353,13 +354,14 @@ const updateAvatar = asyncHandler(async (req, res) => {
     ).select("-password")
 
     return res
-    .status(200)
-    .json(
-        new ApiResponse(200, user, "User avatar is updated successfully!")
-    )
+        .status(200)
+        .json(
+            new ApiResponse(200, user, "User avatar is updated successfully!")
+        )
 
 })
 
+//update user file -- coverImage
 const updateCoverImage = asyncHandler(async (req, res) => {
     const coverImageLocalPath = req.file?.path
 
@@ -386,13 +388,95 @@ const updateCoverImage = asyncHandler(async (req, res) => {
     ).select("-password")
 
     return res
-    .status(200)
-    .json(
-        new ApiResponse(200, user, "User CoverImage is updated successfully!")
-    )
+        .status(200)
+        .json(
+            new ApiResponse(200, user, "User CoverImage is updated successfully!")
+        )
 
 })
 
+//get user profile
+const getUserChannelProfile = asyncHandler(async () => {
+    const { username } = req.params
+    console.log("user profile", username)
+
+    if (!username?.trim()) {
+        throw new ApiError(400, "User is missing!")
+    }
+
+    //Aggregation
+    const channel = await User.aggregate(
+        [
+            {
+                $match: {
+                    username: username?.toLowerCase()
+                }
+            },
+            {
+                $lookup: {
+                    from: "subscriptions",
+                    localField: "_id",
+                    foreignField: "channel",
+                    as: "subscribers"
+                }
+            },
+
+            {
+                $lookup: {
+                    from: "subscriptions",
+                    localField: "_id",
+                    foreignField: "subscriber",
+                    as: "subscribedToChannel"
+                }
+            },
+            {
+                $addFields: {
+                    subscribersCount: {
+                        $size: "$subscribers"
+                    },
+                    subscribedToChannelCount: {
+                        $size: "$subscribedToChannel"
+                    },
+                    isSubscribed: {
+                        $cond: {
+                            if: {
+                                $in: [req.user?._id, "$subscribers.subscriber"],
+                                then: true,
+                                else: false
+                            }
+                        }
+                    }
+                }
+            },
+
+            {
+                $project: {
+                    fullname: 1,
+                    username: 1,
+                    avatar: 1,
+                    coverImage: 1,
+                    subscribersCount: 1,
+                    subscribedToChannelCount: 1,
+                    createdAt: 1
+                }
+            }
+
+        ]
+    )
+
+    // console.log("all channels details:", channel)
+    if (!channel) {
+        throw new ApiError(404, "channel is not found")
+    }
+
+    return res
+        .status(200)
+        .json(
+            new ApiResponse(200, channel[0], "User channel fetched Sucessfully!")
+        )
+
+
+})
 
 
 export {
@@ -405,5 +489,6 @@ export {
     updateUserDetails,
     updateAvatar,
     updateCoverImage,
+    getUserChannelProfile,
 }
 
