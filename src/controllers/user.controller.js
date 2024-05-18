@@ -6,6 +6,16 @@ import { ApiResponse } from "../utils/ApiResponse.js"
 import jwt from "jsonwebtoken"
 import { Subscription } from "../models/subscription.model.js";
 import { mongoose } from "mongoose";
+import { v2 as cloudinary } from 'cloudinary';
+
+//Method to delete the old files from the cloudinary
+const deleteFromCloudinary = async (publicId) => {
+    try {
+        await cloudinary.uploader.destroy(publicId);
+    } catch (error) {
+        throw new ApiError(500, "Error while Deleting file from Cloudinary", error)
+    }
+}
 
 //Method of generateAccessAndRefreshTokens
 const generateAccessAndRefreshTokens = async (userId) => {
@@ -180,8 +190,8 @@ const logoutUser = asyncHandler(async (req, res, next) => {
     await User.findByIdAndUpdate(
         req.user._id,
         {
-            $set: {
-                refreshToken: undefined
+            $unset: {
+                refreshToken: 1
             }
         },
         {
@@ -215,16 +225,15 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
         //decode the encrypted token
         const decodedToken = jwt.verify(incommingRefreshToken, process.env.REFRESH_TOKEN_SECRET) //it will give payload object (id)
 
-        const user = await User.findById(decodedToken?._id)
-
-        // const user =await User.findById(incommingRefreshToken._id)
+        // console.log("decoded refereshtoken", decodedToken)
+        const user = await User.findById(decodedToken._id)
 
         if (!user) {
             throw new ApiError(401, "Invalid refreshToken")
         }
 
         //if not match the refreshtoken
-        if (decodedToken !== user?.refreshToken) {
+        if (incommingRefreshToken !== user.refreshToken) {
             throw new ApiError(401, "RefreshToken is expired or invalid!")
         }
 
@@ -304,7 +313,7 @@ const updateUserDetails = asyncHandler(async (req, res) => {
 
     const { fullname, email } = req.body
 
-    if (!fullname || !email) {
+    if (!fullname && !email) {
         throw new ApiError(400, "feild cannot be")
     }
 
@@ -330,22 +339,33 @@ const updateUserDetails = asyncHandler(async (req, res) => {
 
 //update user file -- avatar
 const updateAvatar = asyncHandler(async (req, res) => {
+
+    //delete previous old images
+    const previousAvatarUrl = req.user?.avatar
+
+    if (previousAvatarUrl) {
+        // Extract the public ID from avatar URL
+        const publicId = previousAvatarUrl.split("/").pop().split(".")[0];
+        //calling function
+        deleteFromCloudinary(publicId)
+    }
+
     const avatarLocalPath = req.file?.path
 
     if (!avatarLocalPath) {
         throw new ApiError(400, "please choose the avatar, file path is not avialable")
     }
 
-    const avatar = await uploadOnCloudinary(avatarLocalPath)
+    const newavatar = await uploadOnCloudinary(avatarLocalPath)
 
-    if (!avatar.url) {
+    if (!newavatar.url) {
         throw new ApiError(400, "Error while uploading avatar on Cloudinary")
     }
 
-    const user = User.findByIdAndUpdate(req.user?._id,
+    const user = await User.findByIdAndUpdate(req.user?._id,
         {
             $set: {
-                avatar: avatar.url
+                avatar: newavatar.url
             }
         },
 
@@ -354,32 +374,45 @@ const updateAvatar = asyncHandler(async (req, res) => {
         }
     ).select("-password")
 
+
+
+
     return res
         .status(200)
         .json(
             new ApiResponse(200, user, "User avatar is updated successfully!")
         )
-    //Perform that after upload old file will delete
 })
 
 //update user file -- coverImage
 const updateCoverImage = asyncHandler(async (req, res) => {
+
+    //delete previous old images
+    const previousCoverImageUrl = req.user?.coverImage
+
+    if (previousCoverImageUrl) {
+        // Extract the public ID from avatar URL
+        const publicId = previousCoverImageUrl.split("/").pop().split(".")[0];
+        //calling function
+        deleteFromCloudinary(publicId)
+    }
+
     const coverImageLocalPath = req.file?.path
 
     if (!coverImageLocalPath) {
         throw new ApiError(400, "please choose the coverImage, file path is not avialable")
     }
 
-    const coverImage = await uploadOnCloudinary(avatarLocalPath)
+    const coverImage = await uploadOnCloudinary(coverImageLocalPath)
 
     if (!coverImage.url) {
         throw new ApiError(400, "Error while uploading CoverImage on Cloudinary")
     }
 
-    const user = User.findByIdAndUpdate(req.user?._id,
+    const user = await User.findByIdAndUpdate(req.user?._id,
         {
             $set: {
-                CoverImage: coverImage.url
+                coverImage: coverImage.url
             }
         },
 
@@ -402,12 +435,13 @@ const updateCoverImage = asyncHandler(async (req, res) => {
 //get user profile
 const getUserChannelProfile = asyncHandler(async (req, res) => {
     const { username } = req.params
-    console.log("user profile", username)
+    console.log("user profile username", username)
 
     if (!username?.trim()) {
         throw new ApiError(400, "User is missing!")
     }
 
+    
     //Aggregation
     const channel = await User.aggregate(
         [
@@ -433,6 +467,8 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
                     as: "subscribedToChannel"
                 }
             },
+
+
             {
                 $addFields: {
                     subscribersCount: {
@@ -444,10 +480,10 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
                     isSubscribed: {
                         $cond: {
                             if: {
-                                $in: [req.user?._id, "$subscribers.subscriber"],
-                                then: true,
-                                else: false
-                            }
+                                $in: [req.user?._id, "$subscribedToChannel.subscriber"]
+                            },
+                            then: true,
+                            else: false,
                         }
                     }
                 }
