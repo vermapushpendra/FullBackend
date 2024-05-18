@@ -5,6 +5,7 @@ import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js"
 import jwt from "jsonwebtoken"
 import { Subscription } from "../models/subscription.model.js";
+import { mongoose } from "mongoose";
 
 //Method of generateAccessAndRefreshTokens
 const generateAccessAndRefreshTokens = async (userId) => {
@@ -358,7 +359,7 @@ const updateAvatar = asyncHandler(async (req, res) => {
         .json(
             new ApiResponse(200, user, "User avatar is updated successfully!")
         )
-
+    //Perform that after upload old file will delete
 })
 
 //update user file -- coverImage
@@ -392,11 +393,14 @@ const updateCoverImage = asyncHandler(async (req, res) => {
         .json(
             new ApiResponse(200, user, "User CoverImage is updated successfully!")
         )
-
+    //Perform that after upload old file will delete
 })
 
+//On click on Subscribe Button
+
+
 //get user profile
-const getUserChannelProfile = asyncHandler(async () => {
+const getUserChannelProfile = asyncHandler(async (req, res) => {
     const { username } = req.params
     console.log("user profile", username)
 
@@ -478,6 +482,71 @@ const getUserChannelProfile = asyncHandler(async () => {
 
 })
 
+//get Watch History
+const getWatchHistory = asyncHandler(async (req, res) => {
+    const user = await User.aggregate(
+        [
+            {
+                $match: {
+                    _id: new mongoose.Types.ObjectId(req.user._id)
+                }
+            },
+            {
+                $lookup: {
+                    from: "videos",
+                    localField: "watchHistory",
+                    foreignField: "_id",
+                    as: "watchHistory",
+
+                    pipeline: [
+                        {
+                            $lookup: {
+                                from: "users",
+                                localField: "owner",
+                                foreignField: "_id",
+                                as: "owner",
+
+                                pipeline: [
+                                    {
+                                        $project: {
+                                            username: 1,
+                                        }
+                                    }
+                                ]
+                            }
+                        },
+                        //pick first element of the array
+                        {
+                            $addFields: {
+                                owner: {
+                                    $first: "$owner"
+                                }
+                            }
+                        }
+                    ]
+                }
+            },
+
+
+        ]
+    )
+
+    if (!user) {
+        throw new ApiError(400, "User is not found to getHistory")
+    }
+
+    return res
+        .status(200)
+        .json(
+            new ApiResponse(200, user[0].watchHistory, "User watchHistory Fetched sucessfully!")
+        )
+
+})
+
+
+
+
+
 
 export {
     registerUser,
@@ -490,5 +559,6 @@ export {
     updateAvatar,
     updateCoverImage,
     getUserChannelProfile,
+    getWatchHistory,
 }
 
