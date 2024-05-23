@@ -1,4 +1,4 @@
-import mongoose, { Schema } from mongoose;
+import mongoose, { Schema } from "mongoose";
 import mongooseAggregatePaginate from "mongoose-aggregate-paginate-v2";
 
 const videoSchema = new Schema({
@@ -8,14 +8,14 @@ const videoSchema = new Schema({
 
     },
 
-    videoFile: {
-        type: String, //Cloudinary
+    video: {
+        type: String, //Cloudinary URL
         required: true,
 
     },
     thumbnail: {
-        type: String,
-        required: true,
+        type: String, //cloudinary URL
+        required: true, 
 
     },
     title: {

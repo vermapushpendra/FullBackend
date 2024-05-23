@@ -83,8 +83,6 @@ const registerUser = asyncHandler(async (req, res, next) => {
         throw new ApiError(400, "Avatar is required (Path)");
     }
 
-
-
     //Upload on Cloudinary
     const avatar = await uploadOnCloudinary(avatarLocalPath)
     const coverImage = await uploadOnCloudinary(coverImageLocalPath)
@@ -115,9 +113,11 @@ const registerUser = asyncHandler(async (req, res, next) => {
 
     //response without pass and refeshToken
     // return res.status(201).json()
-    return res.status(201).json(
-        new ApiResponse(200, createdUser, "User Registered successfully!!")
-    )
+    return res
+        .status(200)
+        .json(
+            new ApiResponse(200, createdUser, "User Registered successfully!!")
+        )
 
 })
 
@@ -296,7 +296,6 @@ const changeUserPassword = asyncHandler(async (req, res) => {
 
 })
 
-
 //get current user
 const getCurrentUser = asyncHandler(async (req, res) => {
     return res
@@ -306,7 +305,6 @@ const getCurrentUser = asyncHandler(async (req, res) => {
         )
 
 })
-
 
 //update user details
 const updateUserDetails = asyncHandler(async (req, res) => {
@@ -441,7 +439,7 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
         throw new ApiError(400, "User is missing!")
     }
 
-    
+
     //Aggregation
     const channel = await User.aggregate(
         [
