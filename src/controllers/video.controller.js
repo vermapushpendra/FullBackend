@@ -1,4 +1,4 @@
-import mongoose, { isValidObjectId } from "mongoose"
+import { mongoose, isValidObjectId } from "mongoose"
 import { Video } from "../models/video.model.js"
 import { User } from "../models/user.model.js"
 import { ApiError } from "../utils/ApiError.js"
@@ -7,21 +7,12 @@ import { asyncHandler } from "../utils/asyncHandler.js"
 import { uploadOnCloudinary } from "../utils/cloudinary.js"
 import { v2 as cloudinary } from 'cloudinary';
 
-//delete files from cloudinary
-const deleteFromCloudinary = async (publicId) => {
-    console.log("publicid in deletefunc", publicId)
-    try {
-        await cloudinary.uploader.destroy(publicId, { resource_type: 'video' });
-    } catch (error) {
-        throw new ApiError(500, "Error while Deleting file from Cloudinary", error)
-    }
-}
 
 const getAllVideos = asyncHandler(async (req, res) => {
     const { page = 1, limit = 10, sortBy = "titl", sortType = "ascendingg", userId } = req.query
     //TODO: get all videos based on query, sort, pagination
 
-    if (!userId) {
+    if (!isValidObjectId(userId)) {
         throw new ApiError(400, "usedId is not found, userId is required !")
     }
 
@@ -71,17 +62,18 @@ const publishAVideo = asyncHandler(async (req, res) => {
     const thumbnailFile = await uploadOnCloudinary(thumbnailLocalPath)
 
     if (!videoFile) {
-        throw new ApiError(400, "video is requied to upload on cloudinary")
+        throw new ApiError(400, "Error while uploading Video on cloudinary")
     }
 
     if (!thumbnailFile) {
-        throw new ApiError(400, "thumbnail is requied to upload on cloudinary")
+        throw new ApiError(400, "Error while uploading Thumbnail on cloudinary")
     }
 
     //create object and send on video collection DB
     const video = await Video.create({
         video: videoFile.url,
         thumbnail: thumbnailFile.url,
+        publicId: videoFile.public_id,
         title,
         description,
         duration: videoFile.duration,
@@ -102,39 +94,97 @@ const publishAVideo = asyncHandler(async (req, res) => {
 
 })
 
+//get video for watch the video
 const getVideoById = asyncHandler(async (req, res) => {
     const { videoId } = req.params
     //TODO: get video by id
+    if (!isValidObjectId(videoId)) {
+        throw new ApiError(400, "videoId is not correct to find video")
+    }
     const video = await Video.findById(videoId)
 
     if (!video) {
         throw new ApiError(404, "Video is not found or VideoId is not correct !")
     }
 
+
+    //increment views of video
+    const user = await User.findById(req.user?._id)
+
+    if (!(user.watchHistory.includes(videoId))) {
+        await Video.findByIdAndUpdate(videoId,
+            {
+                $inc: {
+                    views: 1
+                }
+            },
+            {
+                new: true
+            }
+        )
+    }
+
+    ////set video_id in watchHistory of user
+
+    await User.findByIdAndUpdate(req.user?._id,
+        {
+            $addToSet: {
+                watchHistory: videoId
+            }
+        },
+        {
+            new: true
+        }
+    )
+
+    //// just for testing
+    // await User.findByIdAndUpdate(req.user?._id,
+    //     {
+    //         $set: {
+    //             watchHistory: []
+    //         }
+    //     },
+    //     {
+    //         new: true
+    //     }
+    // )
+
     return res
         .status(200)
         .json(
             new ApiResponse(200, video, "Video is fetched by videoId")
         )
-
 })
+
 
 const updateVideo = asyncHandler(async (req, res) => {
     const { videoId } = req.params
+
+    if (!isValidObjectId(videoId)) {
+        throw new ApiError(400, "videoId is not correct to update video")
+    }
     //TODO: update video details like title, description, thumbnail
 
-    //pevious video url -- Delete the previous file before the updation
     const video = await Video.findById(videoId)
-    const previousVideoUrl = video.video
 
-    if (previousVideoUrl) {
-        // Extract the public ID from video URL
-        const publicId = previousVideoUrl.split("/").pop().split(".")[0];
-        //calling function
-        deleteFromCloudinary(publicId)
+    //previous video publicId
+    const publicId = video.publicId
+
+    if (!publicId) {
+        throw new ApiError(400, "publicId is not present")
     }
 
-    //upload and update
+    if (publicId) {
+        //function call
+        try {
+            // await deleteOnCloudinary(publicId, { resource_type: 'video' })
+            await cloudinary.uploader.destroy(publicId, { resource_type: 'video' })
+        } catch (error) {
+            throw new ApiError(400, "error while deleting video file from cloudinary to update video file")
+        }
+    }
+
+    //upload and update new
     const videoLocalPath = req.file?.path
 
     if (!videoLocalPath) {
@@ -151,6 +201,7 @@ const updateVideo = asyncHandler(async (req, res) => {
         {
             $set: {
                 video: newVideo.url,
+                publicId: newVideo.public_id,
                 duration: newVideo.duration
             }
         },
@@ -170,17 +221,21 @@ const updateVideo = asyncHandler(async (req, res) => {
 const deleteVideo = asyncHandler(async (req, res) => {
     const { videoId } = req.params
     //TODO: delete video
+    if (!isValidObjectId(videoId)) {
+        throw new ApiError(400, "videoId is not correct to delete video")
+    }
+
     const video = await Video.findById(videoId)
 
-    const previousVideoUrl = video.video
+    const publicId = video.publicId
 
-    if (previousVideoUrl) {
-        // Extract the public ID from video URL
-        const publicId = previousVideoUrl.split("/").pop().split(".")[0];
+    if (publicId) {
         //function call
-        console.log("publicidd", publicId)
-        deleteFromCloudinary(publicId)
-
+        try {
+            await cloudinary.uploader.destroy(publicId, { resource_type: 'video' })
+        } catch (error) {
+            throw new ApiError(400, "error while deleting video file from cloudinary")
+        }
     }
 
     return res
@@ -194,28 +249,28 @@ const deleteVideo = asyncHandler(async (req, res) => {
 const togglePublishStatus = asyncHandler(async (req, res) => {
     const { videoId } = req.params
 
-    const video = Video.findById(videoId)
+    const video = await Video.findById(videoId)
 
-    if (!video) {
-        throw new ApiError(400, "video is not found")
+    if (!isValidObjectId(videoId)) {
+        throw new ApiError(400, "videoId is not correct to Toggle publish status of video")
     }
 
     //toggle the ispublished --> if true then false if false then true
     video.isPublished = !video.isPublished
 
-    await Video.findByIdAndUpdate(videoId,
+    const publishStatus = await Video.findByIdAndUpdate(videoId,
         {
             isPublished: video.isPublished
         },
         {
             new: true
         }
-    )
+    ).select("-video -thumbnail -title -description -views -duration -owner")
 
     return res
         .status(200)
         .json(
-            new ApiResponse(200, [], "If your video was published then now unpublish And if It was unpublished then now published !")
+            new ApiResponse(200, publishStatus, "If your video was published then now unpublish And if It was unpublished then now published !")
         )
 
 })

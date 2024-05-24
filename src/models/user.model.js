@@ -35,10 +35,13 @@ const userSchema = new Schema(
         {
             type: String, //cloudinary
         },
-        watchHistory: {
-            type: Schema.Types.ObjectId,
-            ref: "Video"
-        },
+        
+        watchHistory: [
+            {
+                type: Schema.Types.ObjectId,
+                ref: "Video"
+            }
+        ],
         password: {
             type: String,
             required: [true, "Password is required !"]
@@ -46,8 +49,8 @@ const userSchema = new Schema(
         refreshToken: {
             type: String
         }
-
     },
+
     { timestamps: true }
 );
 

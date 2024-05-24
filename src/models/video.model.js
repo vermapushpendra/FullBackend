@@ -15,7 +15,7 @@ const videoSchema = new Schema({
     },
     thumbnail: {
         type: String, //cloudinary URL
-        required: true, 
+        required: true,
 
     },
     title: {
@@ -33,6 +33,11 @@ const videoSchema = new Schema({
         required: true,
 
     },
+
+    publicId: {
+        type: String, //cloudinary
+
+    },
     views: {
         type: Number,
         default: 0
@@ -40,7 +45,7 @@ const videoSchema = new Schema({
     },
     isPublished: {
         type: Boolean,
-        default: true,
+        default: false,
     },
     owner: {
         type: Schema.Types.ObjectId,
