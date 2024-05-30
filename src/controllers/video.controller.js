@@ -9,27 +9,66 @@ import { v2 as cloudinary } from 'cloudinary';
 
 
 const getAllVideos = asyncHandler(async (req, res) => {
-    const { page = 1, limit = 10, sortBy = "titl", sortType = "ascendingg", userId } = req.query
+    const { page = 1, limit = 10, sortBy = "title", sortType = "ascending", userId } = req.query
     //TODO: get all videos based on query, sort, pagination
+
+    const pageNumber = parseInt(page)
+    const pageLimit = parseInt(limit)
+    const skip = (pageNumber - 1) * pageLimit
+    const sortdirection = sortType === "ascending" ? 1 : -1
 
     if (!isValidObjectId(userId)) {
         throw new ApiError(400, "usedId is not found, userId is required !")
     }
 
     try {
-        const videos = await Video.find({ owner: userId })
-            .sort({ [sortBy]: sortType })
-            .skip((page - 1) * limit)
-            .limit(parseInt(limit));
+        const videos = await Video.aggregate(
+            [
+                {
+                    $match: {
+                        owner: new mongoose.Types.ObjectId(userId)
+                    }
+                },
+                {
+                    $lookup: {
+                        from: "users",
+                        localField: "owner",
+                        foreignField: "_id",
+                        as: "owner",
+                        pipeline: [
+                            {
+                                $project: {
+                                    fullname: 1,
+                                    username: 1,
+                                    avatar: 1
+                                }
+                            }
+                        ]
+                    }
+                },
+                {
+                    $skip: skip
+                },
+                {
+                    $limit: pageLimit
+                },
+                {
+                    $sort: { [sortBy]: sortdirection }
+                }
+
+            ])
+
+        const totalVideos = await Video.countDocuments({ owner: userId })
+        const totalPages = Math.ceil(totalVideos / pageLimit)
 
         return res
             .status(200)
             .json(
-                new ApiResponse(200, videos, "All videos fetched")
+                new ApiResponse(200, { videos, totalPages, totalVideos }, "All videos fetched")
             )
 
     } catch (error) {
-        throw new ApiError(400, "videos not fetched", error)
+        throw new ApiError(400, "Error while fetching videos", error)
     }
 
 })
