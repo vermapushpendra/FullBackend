@@ -160,7 +160,6 @@ const updateComment = asyncHandler(async (req, res) => {
 
 })
 
-
 const deleteComment = asyncHandler(async (req, res) => {
     const { commentId } = req.params
 

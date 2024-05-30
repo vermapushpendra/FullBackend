@@ -27,7 +27,6 @@ const toggleSubscription = asyncHandler(async (req, res) => {
             subscriber: subscriberId
         }
     )
-    console.log("subscription check", isSubscribed)
 
     let subscriptionStatus;
     try {
