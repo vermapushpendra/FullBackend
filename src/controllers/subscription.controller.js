@@ -67,37 +67,35 @@ const getUserChannelSubscribers = asyncHandler(async (req, res) => {
         throw new ApiError(401, "Invalid Channel ID!")
     }
 
-    const userSubscribers = Subscription.aggregate(
+    const userSubscribers = await Subscription.aggregate(
         [
             {
                 $match: {
                     channel: new mongoose.Types.ObjectId(channelId),
                 }
             },
+            //One More way to count subscribers without lookup            
             {
-                $lookup: {
-                    from: "users",
-                    localField: "subscriber",
-                    foreignField: "_id",
-                    as: "subscriber"
-                }
-            },
-
-            {
-                $addFields: {
-                    subscriber: {
-                        $size: "$subscriber"
+                $group: {
+                    _id: null,
+                    totalSubscribers: {
+                        $sum: 1
                     }
                 }
+            },
+            {
+                $project: {
+                    _id: 0,
+                    totalSubscribers: 1
+                }
             }
-
         ]
     )
 
     return res
         .status(200)
         .json(
-            new ApiResponse(200, userSubscribers, "Subscribers fetched sucessfully !")
+            new ApiResponse(200, userSubscribers[0] || { subscribers: 0 }, "Subscribers fetched sucessfully !")
         )
 })
 

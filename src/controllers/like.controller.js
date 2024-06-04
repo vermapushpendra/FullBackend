@@ -20,13 +20,13 @@ const toggleVideoLike = asyncHandler(async (req, res) => {
         throw new ApiError(404, "Video not found with this video Id or Invalid video Id")
     }
 
-    if (!req.user?._id) {
+    if (!isValidObjectId(req.user?._id)) {
         throw new ApiError(404, "requested user Id not found")
     }
 
     const user = await User.findById(req.user?._id)
 
-    if (!isValidObjectId(user)) {
+    if (!user) {
         throw new ApiError(404, "User not found with this User Id")
     }
 
@@ -107,7 +107,7 @@ const toggleCommentLike = asyncHandler(async (req, res) => {
         )
 })
 
-
+//Videos Liked By the Current User 
 const getLikedVideos = asyncHandler(async (req, res) => {
 
     if (!req.user?._id) {
